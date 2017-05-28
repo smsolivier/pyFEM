@@ -80,6 +80,9 @@ class FEM:
 			plt.show()
 
 	def solve(self):
+		''' solve the FEM equations 
+			initiate mesh refinement if turned on 
+		''' 
 
 		self.x, f = self.getf() 
 
@@ -276,6 +279,10 @@ class FEM:
 		return err 
 
 	def MMS(self):
+		''' set q, BC to froce solution to:
+				f_mms = sin(pi x / xb) 
+			Return x, numerical solution, and error from MMS solution 
+		''' 
 
 		self.f_mms = lambda x: np.sin(np.pi*x/self.xb)
 
