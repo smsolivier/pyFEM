@@ -96,7 +96,7 @@ class FEM:
 					print('--- WARNING: maximum number of refinements reached --- ')
 					break 
 
-				self.err = self.getErr(f, PLOT=False) # get residual error for each element 
+				self.err = self.getErr(f, PLOT=True) # get residual error for each element 
 
 				self.refineMesh(f, self.err) # get new element locations, order 
 
@@ -240,7 +240,7 @@ class FEM:
 		# generate new mesh 
 		self.genMesh(self.xe)
 
-	def getErr(self, f, PLOT=False):
+	def getErr(self, f, PLOT=True):
 		''' Generate the residual in each element ''' 
 
 		err = np.zeros(self.N) # store residual 
@@ -307,8 +307,8 @@ p = 2
 
 fem = FEM(xe, a, b, q, f0, p)
 fem.refineOn(1e-6, 5)
-x, f, err = fem.MMS()
-# x, f = fem.solve()
+# x, f, err = fem.MMS()
+x, f = fem.solve()
 
 plt.plot(x, f, '-o')
 plt.show()

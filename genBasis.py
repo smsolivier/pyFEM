@@ -38,7 +38,7 @@ def genBasis(N):
 
 if __name__ == '__main__': 
 
-	N = 10
+	N = 4
 	B, dB = genBasis(N)
 
 	xloc = np.linspace(-1, 1, N)

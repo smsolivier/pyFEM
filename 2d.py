@@ -5,14 +5,25 @@ import matplotlib.pyplot as plt
 
 from scipy.integrate import dblquad
 
+from ProgressBar import progressbar 
+
 class Mesh: 
 
-	def __init__(self, Nx, Ny, xb, yb):
+	def __init__(self, Nx, Ny, xb, yb, a, b, c, q, f0):
+
+		# make variables public 
+		self.Nx = Nx 
+		self.Ny = Ny 
+		self.xb = xb 
+		self.yb = yb
+
+		self.f0 = f0 
 
 		self.x, self.y = np.meshgrid(np.linspace(0, xb, Nx+1), np.linspace(0, yb, Ny+1))
 
 		# convert to list of points 
-		self.pts = np.zeros(((Nx+1)*(Ny+1), 2))
+		self.Nnodes = (Nx+1)*(Ny+1)
+		self.pts = np.zeros((self.Nnodes, 2))
 		ii = 0 
 		for i in range(Nx+1):
 
@@ -41,6 +52,11 @@ class Mesh:
 
 				ii += 1
 
+		# store number of elements used 
+		self.Nelements = len(self.ele)
+
+		print('Number of Elements =', self.Nelements)
+
 		# determine neighbors 
 		for i in range(len(self.ele)):
 
@@ -65,6 +81,44 @@ class Mesh:
 				if (self.ele[i].F[3,0] == self.ele[j].F[1,0] and self.ele[i].F[3,1] == self.ele[j].F[1,1]):
 
 					self.ele[i].neighbor[3] = self.ele[j].elnum
+
+		# determine boundary nodes 
+		self.boundary = [] # store bottom, right, top, left boundary node numbers 
+		for i in range(4):
+
+			bound = np.array([], dtype=int)
+			for el in self.ele:
+
+				if (el.neighbor[i] == -1):
+
+					bound = np.concatenate((bound, el.F[i]))
+
+			self.boundary.append(np.unique(bound))
+ 
+		# generate local stiffness matrices 
+		print('generating local stiffness matrices')
+		bar = progressbar(len(self.ele), True)
+		for el in self.ele:
+
+			el.genStiff(a, b, c, q)
+
+			bar.update()
+
+	def mapScalar(self, f):
+		''' map list of values back to grid for plotting ''' 
+
+		grid = np.zeros((self.Nx+1, self.Ny+1))
+
+		ii = 0 
+		for i in range(self.Nx+1):
+
+			for j in range(self.Ny+1):
+
+				grid[j,i] = f[ii]
+
+				ii += 1
+
+		return self.x, self.y, grid 
 
 class Element:
 
@@ -157,12 +211,76 @@ class Element:
 
 				self.A[i,j] = dblquad(func, -1, 1, lambda x: -1, lambda x: 1)[0] 
 
-				func = lambda xi, eta: self.B[i](xi, eta)*q*self.B[j](xi, eta)*self.J_det(xi, eta) 
+				func = lambda xi, eta: self.B[i](xi, eta)*q(self.box_pts[j,0], self.box_pts[j,1])\
+					*self.B[j](xi, eta)*self.J_det(xi, eta) 
 
 				self.rhs[i] += dblquad(func, -1, 1, lambda x: -1, lambda x: 1)[0] 
 
-		print(self.rhs)
+def Assemble(mesh):
 
-mesh = Mesh(2, 2, 1, 1)
+	A = np.zeros((mesh.Nnodes, mesh.Nnodes)) # global stiffness matrix 
+	b = np.zeros(mesh.Nnodes) # right hand side 
 
-mesh.ele[0].genStiff(1, 1, 1, 1)
+	# begin assembly. loop through elements and assemble global 
+	for i in range(mesh.Nelements):
+
+		mEl = mesh.ele[i] # my element (current element)
+
+		for j in range(4): # loop through number of local nodes/element 
+
+			# get global node number = row of matrix 
+			node = mEl.box[j] 
+
+			# generate contribution of each local node 
+			for k in range(4):
+
+				A[node,mEl.box[k]] += mEl.A[j,k]
+
+			b[node] += mEl.rhs[j]
+			
+	# apply boundary conditions 
+	boundary = np.unique(np.concatenate((mesh.boundary[0], mesh.boundary[3])))
+
+	for mBound in boundary:
+
+		# delete row 
+		A[mBound,:] = 0 
+
+		# set boundary value 
+		b[mBound] = mesh.f0
+
+		# subtract col 
+		b -= mesh.f0*A[:,mBound] 
+
+		# set equation to equal RHS value 
+		A[mBound, mBound] = 1
+
+	np.savetxt('A.csv', A, delimiter=',')
+
+	# solve for unknowns
+	f = np.linalg.solve(A, b)  
+
+	x, y, grid = mesh.mapScalar(f)
+
+	return x, y, grid 
+
+a = 1 
+b = 0
+c = 1 
+xb = 1
+yb = 1 
+Nx = 15
+Ny = 15
+f0 = 1
+# q = lambda x, y: a*np.pi/xb*np.cos(np.pi*x/xb)*np.sin(np.pi*y/yb) + \
+	# b*np.pi/yb*np.sin(np.pi*x/xb)*np.cos(np.pi*y/yb) + \
+	# c*np.sin(np.pi*x/xb)*np.sin(np.pi*y/yb)
+q = lambda x, y: 0 
+
+mesh = Mesh(Nx, Ny, xb, yb, a, b, c, q, f0)
+
+x, y, f = Assemble(mesh)
+
+plt.pcolor(x, y, f, cmap='viridis')
+plt.colorbar()
+plt.show()
