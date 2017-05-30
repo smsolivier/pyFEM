@@ -2,8 +2,10 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
 
 from scipy.integrate import dblquad
+from scipy.interpolate import interp2d
 
 from ProgressBar import progressbar 
 
@@ -23,6 +25,7 @@ class Mesh:
 
 		# convert to list of points 
 		self.Nnodes = (Nx+1)*(Ny+1)
+		print('Number of Nodes =', self.Nnodes)
 		self.pts = np.zeros((self.Nnodes, 2))
 		ii = 0 
 		for i in range(Nx+1):
@@ -43,19 +46,17 @@ class Mesh:
 
 				box = np.zeros(4, dtype=int) 
 
-				box[0] = j+(Nx+1)*i
-				box[1] = j+(Nx+1)*i+Ny+1
-				box[2] = j+(Nx+1)*i+Ny+2
-				box[3] = j+(Nx+1)*i+1
-			
+				box[0] = j+(Ny+1)*i
+				box[1] = j+(Ny+1)*i+Ny+1
+				box[2] = j+(Ny+1)*i+Ny+2
+				box[3] = j+(Ny+1)*i+1
+
 				self.ele.append(Element(box, self.pts[box[:],:], ii))
 
 				ii += 1
 
 		# store number of elements used 
 		self.Nelements = len(self.ele)
-
-		print('Number of Elements =', self.Nelements)
 
 		# determine neighbors 
 		for i in range(len(self.ele)):
@@ -107,7 +108,7 @@ class Mesh:
 	def mapScalar(self, f):
 		''' map list of values back to grid for plotting ''' 
 
-		grid = np.zeros((self.Nx+1, self.Ny+1))
+		grid = np.zeros((self.Ny+1, self.Nx+1))
 
 		ii = 0 
 		for i in range(self.Nx+1):
@@ -117,6 +118,8 @@ class Mesh:
 				grid[j,i] = f[ii]
 
 				ii += 1
+
+		np.savetxt('f', grid, delimiter=',')
 
 		return self.x, self.y, grid 
 
@@ -199,9 +202,9 @@ class Element:
 		self.A = np.zeros((4,4))
 		self.rhs = np.zeros(4) 
 
-		for i in range(4):
+		for i in range(4): # local node number 
 
-			for j in range(4):
+			for j in range(4): # contributions from surrounding local nodes 
 
 				func = lambda xi, eta: (a*self.B[i](xi, eta)*(self.J_inv[0](xi, eta)*self.dBxi[j](xi, eta) 
 					+ self.J_inv[1](xi, eta)*self.dBeta[j](xi, eta)) + \
@@ -209,12 +212,20 @@ class Element:
 						self.J_inv[3](xi, eta)*self.dBeta[j](xi, eta)) + \
 					c*self.B[i](xi, eta)*self.B[j](xi, eta)) * self.J_det(xi, eta)
 
-				self.A[i,j] = dblquad(func, -1, 1, lambda x: -1, lambda x: 1)[0] 
+				integral = dblquad(func, -1, 1, lambda x: -1, lambda x: 1)
+				if (integral[1] > 1e-10):
+
+					print('--- WARNING: integral error > 1e-10 --- ')
+				self.A[i,j] = integral[0]
 
 				func = lambda xi, eta: self.B[i](xi, eta)*q(self.box_pts[j,0], self.box_pts[j,1])\
 					*self.B[j](xi, eta)*self.J_det(xi, eta) 
 
-				self.rhs[i] += dblquad(func, -1, 1, lambda x: -1, lambda x: 1)[0] 
+				integral = dblquad(func, -1, 1, lambda x: -1, lambda x: 1)
+				if (integral[1] > 1e-10):
+
+					print('--- WARNING: integral error > 1e-10 --- ')
+				self.rhs[i] += integral[0]  
 
 def Assemble(mesh):
 
@@ -246,14 +257,17 @@ def Assemble(mesh):
 		# delete row 
 		A[mBound,:] = 0 
 
-		# set boundary value 
-		b[mBound] = mesh.f0
-
 		# subtract col 
-		b -= mesh.f0*A[:,mBound] 
+		b -= mesh.f0*A[:,mBound]
+
+		# remove column 
+		A[:,mBound] = 0 
 
 		# set equation to equal RHS value 
 		A[mBound, mBound] = 1
+
+		# set boundary value 
+		b[mBound] = mesh.f0
 
 	np.savetxt('A.csv', A, delimiter=',')
 
@@ -264,23 +278,51 @@ def Assemble(mesh):
 
 	return x, y, grid 
 
-a = 1 
-b = 0
+a = 0
+b = 1
 c = 1 
-xb = 1
-yb = 1 
-Nx = 15
-Ny = 15
-f0 = 1
-# q = lambda x, y: a*np.pi/xb*np.cos(np.pi*x/xb)*np.sin(np.pi*y/yb) + \
-	# b*np.pi/yb*np.sin(np.pi*x/xb)*np.cos(np.pi*y/yb) + \
-	# c*np.sin(np.pi*x/xb)*np.sin(np.pi*y/yb)
-q = lambda x, y: 0 
+xb = .1
+yb = .1 
+Nx = 20
+Ny = 20
+f0 = 0
+
+f_mms = lambda x, y: np.sin(np.pi*x/xb)*np.sin(np.pi*y/yb)
+q = lambda x, y: a*np.pi/xb*np.cos(np.pi*x/xb)*np.sin(np.pi*y/yb) + \
+	b*np.pi/yb*np.sin(np.pi*x/xb)*np.cos(np.pi*y/yb) + \
+	c*np.sin(np.pi*x/xb)*np.sin(np.pi*y/yb)
+# q = lambda x, y: 0 
 
 mesh = Mesh(Nx, Ny, xb, yb, a, b, c, q, f0)
 
 x, y, f = Assemble(mesh)
 
+plt.figure()
 plt.pcolor(x, y, f, cmap='viridis')
 plt.colorbar()
+
+plt.figure()
+for i in range(np.shape(x)[0]):
+
+	plt.plot(x[i,:], f[i,:], label=str(y[i,0]))
+plt.title('x')
+plt.legend(loc='best')
+
+plt.figure()
+for i in range(np.shape(x)[1]):
+
+	plt.plot(y[:,i], f[:,i], label=str(x[0,i]))
+plt.title('y')
+plt.legend(loc='best')
+
+plt.figure()
+plt.pcolor(x, y, np.fabs(f - f_mms(x, y)), cmap='viridis', norm=LogNorm())
+plt.colorbar()
+plt.title('error')
+
+interp = interp2d(x, y, f)
+
+print('Area =', xb/Nx*yb/Ny)
+print('Error =', np.fabs(interp(xb/2, yb/2) - f_mms(xb/2, yb/2)))
+
 plt.show()
