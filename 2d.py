@@ -6,6 +6,8 @@ from matplotlib.colors import LogNorm
 
 from scipy.interpolate import interp2d
 
+from genBasis import genBasis2D
+
 from ProgressBar import progressbar 
 
 class Mesh: 
@@ -122,6 +124,16 @@ class Mesh:
 
 		return self.x, self.y, grid 
 
+	def printPoints(self, f):
+
+		file = open('points.csv', 'w')
+		file.write('x,y,z,f\n')
+		for i in range(self.Nnodes):
+
+			file.write('{},{},{},{}\n'.format(self.pts[i,0], self.pts[i,1], 0, f[i]))
+
+		file.close()
+
 class Element:
 
 	def __init__(self, box, box_pts, elnum):
@@ -140,6 +152,8 @@ class Element:
 		self.F[3,:] = np.array([sorted([self.box[3], self.box[0]])]) # face 3 
 
 		self.neighbor = np.zeros(4, dtype=int) - 1
+
+		# self.B, self.dBxi, self.dBeta = genBasis2D()
 
 		self.B = [] # store bases functions 
 		self.B.append(lambda xi, eta: .25*(1 - xi)*(1 - eta))
@@ -220,7 +234,7 @@ class Element:
 				integral = self.gauss2D(func)
 				self.rhs[i] += integral
 
-	def gauss2D(self, f, p=4):
+	def gauss2D(self, f, p=2):
 
 		mu, w = np.polynomial.legendre.leggauss(p)
 
@@ -254,9 +268,13 @@ def Assemble(mesh):
 				A[node,mEl.box[k]] += mEl.A[j,k]
 
 			b[node] += mEl.rhs[j]
+
+	np.savetxt('Abound.csv', A, delimiter=',')
 			
 	# apply boundary conditions 
 	boundary = np.unique(np.concatenate((mesh.boundary[0], mesh.boundary[3])))
+
+	print(boundary)
 
 	for mBound in boundary:
 
@@ -275,6 +293,9 @@ def Assemble(mesh):
 		# set boundary value 
 		b[mBound] = mesh.f0
 
+	plt.figure()
+	plt.plot(b, '-o')
+
 	np.savetxt('A.csv', A, delimiter=',')
 
 	# solve for unknowns
@@ -284,20 +305,20 @@ def Assemble(mesh):
 
 	return x, y, grid 
 
-a = 0
-b = 1
+a = 1
+b = 0
 c = 1 
-xb = .1
-yb = .1 
-Nx = 40
-Ny = 40
-f0 = 0
+xb = 1
+yb = 1 
+Nx = 30
+Ny = 30
+f0 = 1
 
 f_mms = lambda x, y: np.sin(np.pi*x/xb)*np.sin(np.pi*y/yb)
-q = lambda x, y: a*np.pi/xb*np.cos(np.pi*x/xb)*np.sin(np.pi*y/yb) + \
-	b*np.pi/yb*np.sin(np.pi*x/xb)*np.cos(np.pi*y/yb) + \
-	c*np.sin(np.pi*x/xb)*np.sin(np.pi*y/yb)
-# q = lambda x, y: 0 
+# q = lambda x, y: a*np.pi/xb*np.cos(np.pi*x/xb)*np.sin(np.pi*y/yb) + \
+	# b*np.pi/yb*np.sin(np.pi*x/xb)*np.cos(np.pi*y/yb) + \
+	# c*np.sin(np.pi*x/xb)*np.sin(np.pi*y/yb)
+q = lambda x, y: 0 
 
 mesh = Mesh(Nx, Ny, xb, yb, a, b, c, q, f0)
 
@@ -321,14 +342,14 @@ for i in range(np.shape(x)[1]):
 plt.title('y')
 plt.legend(loc='best')
 
-plt.figure()
-plt.pcolor(x, y, np.fabs(f - f_mms(x, y)), cmap='viridis', norm=LogNorm())
-plt.colorbar()
-plt.title('error')
+# plt.figure()
+# plt.pcolor(x, y, np.fabs(f - f_mms(x, y)), cmap='viridis', norm=LogNorm())
+# plt.colorbar()
+# plt.title('error')
 
-interp = interp2d(x, y, f)
+# interp = interp2d(x, y, f)
 
-print('Area =', xb/Nx*yb/Ny)
-print('Error =', np.fabs(interp(xb/2, yb/2) - f_mms(xb/2, yb/2)))
+# print('Area =', xb/Nx*yb/Ny)
+# print('Error =', np.fabs(interp(xb/2, yb/2) - f_mms(xb/2, yb/2)))
 
 plt.show()

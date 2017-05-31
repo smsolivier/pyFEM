@@ -36,18 +36,53 @@ def genBasis(N):
 
 	return B, dB
 
+def genBasis2D():
+
+	pts = np.array([[-1,-1], [1,-1], [1,1], [-1,1]])
+
+	coef = np.zeros((4,4))
+
+	for i in range(4):
+
+		A = np.zeros((4,4))
+
+		for j in range(4):
+
+			A[j,:] = np.array([1, pts[j,0], pts[j,1], pts[j,0]*pts[j,1]])
+
+		b = np.zeros(4)
+		b[i] = 1 
+
+		coef[i,:] = np.linalg.solve(A, b)
+
+	B = [] 
+	dBxi = [] 
+	dBeta = [] 
+
+	for i in range(4):
+
+		B.append(lambda x, y: coef[i,0] + coef[i,1]*x + coef[i,2]*y + coef[i,3]*x*y)
+
+		dBxi.append(lambda x, y: coef[i,1] + coef[i,3]*y)
+
+		dBeta.append(lambda x, y: coef[i,2] + coef[i,3]*x)
+
+	return B, dBxi, dBeta 
+
 if __name__ == '__main__': 
 
-	N = 4
-	B, dB = genBasis(N)
+	# N = 4
+	# B, dB = genBasis(N)
 
-	xloc = np.linspace(-1, 1, N)
+	# xloc = np.linspace(-1, 1, N)
 
-	x = np.linspace(-1, 1, 100)
-	for i in range(N):
+	# x = np.linspace(-1, 1, 100)
+	# for i in range(N):
 
-		plt.plot(x, B[i](x))
+	# 	plt.plot(x, B[i](x))
 
-		plt.axvline(xloc[i], color='k', alpha=.5)
+	# 	plt.axvline(xloc[i], color='k', alpha=.5)
 
-	plt.show()
+	# plt.show()
+
+	B, dBxi, dBeta = genBasis2D()
