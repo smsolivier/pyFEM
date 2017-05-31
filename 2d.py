@@ -4,7 +4,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 
-from scipy.integrate import dblquad
 from scipy.interpolate import interp2d
 
 from ProgressBar import progressbar 
@@ -212,20 +211,27 @@ class Element:
 						self.J_inv[3](xi, eta)*self.dBeta[j](xi, eta)) + \
 					c*self.B[i](xi, eta)*self.B[j](xi, eta)) * self.J_det(xi, eta)
 
-				integral = dblquad(func, -1, 1, lambda x: -1, lambda x: 1)
-				if (integral[1] > 1e-10):
-
-					print('--- WARNING: integral error > 1e-10 --- ')
-				self.A[i,j] = integral[0]
+				integral = self.gauss2D(func)
+				self.A[i,j] = integral
 
 				func = lambda xi, eta: self.B[i](xi, eta)*q(self.box_pts[j,0], self.box_pts[j,1])\
 					*self.B[j](xi, eta)*self.J_det(xi, eta) 
 
-				integral = dblquad(func, -1, 1, lambda x: -1, lambda x: 1)
-				if (integral[1] > 1e-10):
+				integral = self.gauss2D(func)
+				self.rhs[i] += integral
 
-					print('--- WARNING: integral error > 1e-10 --- ')
-				self.rhs[i] += integral[0]  
+	def gauss2D(self, f, p=4):
+
+		mu, w = np.polynomial.legendre.leggauss(p)
+
+		integral = 0 
+		for i in range(p):
+
+			for j in range(p):
+
+				integral += f(mu[i], mu[j]) * w[i] * w[j] 
+
+		return integral 
 
 def Assemble(mesh):
 
@@ -283,8 +289,8 @@ b = 1
 c = 1 
 xb = .1
 yb = .1 
-Nx = 20
-Ny = 20
+Nx = 40
+Ny = 40
 f0 = 0
 
 f_mms = lambda x, y: np.sin(np.pi*x/xb)*np.sin(np.pi*y/yb)
