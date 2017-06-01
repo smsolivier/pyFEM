@@ -38,11 +38,29 @@ def DG(N, p, xb, f0, a, b, q):
 
 			for k in range(p): 
 
-				func = lambda xi: -a*B[k](xi)*dB[j](xi) + b*B[j](xi)*B[k](xi) * J(xi) 
-				A[j,k] = quad(func, -1, 1)[0] 
+				# compute mass matrix 
+				func = lambda xi: B[j](xi)*B[k](xi) * J(xi)
+				Mjk = quad(func, -1, 1)[0] 
 
-				func = lambda xi: B[j](xi)*B[k](xi)*q(xglob[j]) * J(xi)
-				rhs[j] += quad(func, -1, 1)[0] 
+				# stiffness 
+				func = lambda xi: dB[j](xi) * B[k](xi) 
+				Sjk = quad(func, -1, 1)[0] 
+
+				A[j,k] = -a*Sjk + b*Mjk #+ a*B[j](1) 
+
+				# func = lambda xi: -a*B[k](xi)*dB[j](xi) + b*B[j](xi)*B[k](xi) * J(xi) 
+				# A[j,k] = quad(func, -1, 1)[0] 
+
+				rhs[j] += Mjk * q(xglob[j]) 
+
+				# func = lambda xi: B[j](xi)*B[k](xi)*q(xglob[j]) * J(xi)
+				# rhs[j] += quad(func, -1, 1)[0] 
+
+				# if (i == 0):
+
+				# 	fnodes = np.ones(p)*f0 
+
+				# rhs[j] += b*B[j](-1)*fnodes[j] 
 
 		A[-1,-1] += a*B[-1](1) 
 
